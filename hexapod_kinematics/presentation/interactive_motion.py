@@ -8,7 +8,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.widgets import Slider
 
-from hexapod_kinematics.presentation.animate_motion import _draw_frame, build_footfall
+from hexapod_kinematics.presentation.animate_motion import (
+    _collect_bounds,
+    _draw_frame,
+    build_footfall,
+)
 
 
 def interactive_motion(
@@ -33,7 +37,8 @@ def interactive_motion(
         frames.append(f)
 
     footfall = build_footfall(frames)
-    fig = plt.figure(figsize=(12, 9))
+    xlim, ylim, zlim = _collect_bounds(frames, mounts_xy)
+    fig = plt.figure(figsize=(13, 9))
     ax3d = fig.add_subplot(2, 2, 1, projection="3d")
     ax_top = fig.add_subplot(2, 2, 2)
     ax_foot = fig.add_subplot(2, 1, 2)
@@ -43,7 +48,19 @@ def interactive_motion(
         idx = int(np.clip(i, 0, len(frames) - 1))
         fr = frames[idx]
         t_norm = (idx % footfall.shape[1]) / max(footfall.shape[1], 1)
-        _draw_frame(ax3d, ax_top, ax_foot, fr, mounts_xy, footfall, t_norm, title)
+        _draw_frame(
+            ax3d,
+            ax_top,
+            ax_foot,
+            fr,
+            mounts_xy,
+            footfall,
+            t_norm,
+            title,
+            xlim=xlim,
+            ylim=ylim,
+            zlim=zlim,
+        )
         fig.canvas.draw_idle()
 
     ax_slider = fig.add_axes((0.15, 0.02, 0.7, 0.03))

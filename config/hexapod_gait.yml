@@ -6,6 +6,15 @@ min_pulse: 1000
 max_pulse: 2000
 deg_per_us: 0.18
 
+# Math angles [coxa, femur, tibia] rad at 1500 µs / 90° (L-stance offset for pulse↔math).
+# femur=0 horizontal, tibia=−π/2 vertical down, knee |tibia|=π/2.
+# Tip uses tibia_effective → body_height ≈ tibia_eff. Not derived via IK.
+servo_neutral_angles: [0.0, 0.0, -1.5707963267948966]
+
+# Inward margin (mm) when auto-deriving IK neutral_reach from FK(servo_neutral).
+# L-stance sits near vertical reach limit; 5 mm reduces IK boundary hits on stride/step.
+ik_reach_margin_mm: 5.0
+
 transfer_traj:  # [coxa, femur, tibia] × TRAJ_STEPS
   - [1320, 1700, 1250]
   - [1500, 1800, 1150]
@@ -30,10 +39,11 @@ stride_mm: 40.0
 step_height_mm: 20.0
 stance_duty: 0.5
 swing_profile: poly5  # ellipse | cycloid | poly5
-body_height_mm: null  # null → auto from gabarit / fallback below
-body_height_fallback_mm: 45.0
+body_height_mm: null  # null → z_hip − z_foot at servo_neutral (world, tibia_eff)
+body_height_fallback_mm: 45.0  # only if servo_neutral_angles missing
 ground_clearance_mm: 5.0
 com_offset_mm: [0.0, 0.0, 0.0]
 
 # Neutral radial reach in coxa-local when placing feet (mm)
-neutral_reach_mm: null  # null → coxa + 0.55*(femur+tibia_eff)
+# null → FK(servo_neutral) horizontal reach − ik_reach_margin_mm
+neutral_reach_mm: null

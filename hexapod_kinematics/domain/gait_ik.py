@@ -21,6 +21,7 @@ from hexapod_kinematics.domain.kinematics import (
     Position3D,
     inverse_kinematics,
 )
+from hexapod_kinematics.domain.neutral_pose import l_pose_neutral_angles
 
 SwingProfile = Literal["ellipse", "cycloid", "poly5"]
 
@@ -113,10 +114,21 @@ def default_neutral_xy(
     lengths: LinkLengths,
     gait: dict[str, Any],
 ) -> np.ndarray:
-    """Hip XY + outward horizontal unit * neutral_reach."""
+    """Hip XY + outward horizontal unit * neutral_reach (with IK margin)."""
     reach = gait.get("neutral_reach_mm")
     if reach is None:
-        reach = lengths.coxa + 0.55 * (lengths.femur + lengths.tibia)
+        from hexapod_kinematics.domain.neutral_pose import (
+            ik_reach_margin_from_gait,
+            neutral_reach_mm,
+            resolve_servo_neutral,
+        )
+
+        angles = resolve_servo_neutral(gait, lengths)
+        reach = neutral_reach_mm(
+            angles,
+            lengths,
+            margin_mm=ik_reach_margin_from_gait(gait),
+        )
     reach = float(reach)
     radial = mount.origin.copy()
     radial[2] = 0.0
@@ -161,7 +173,12 @@ def sample_ik_frame(
             profile=profile,  # type: ignore[arg-type]
         )
         target_coxa = world_to_coxa(target_body, mount)
-        ok, angles = inverse_kinematics(target_coxa, lengths)
+        prefer = (
+            last_angles[mount.leg_id]
+            if last_angles and mount.leg_id in last_angles
+            else l_pose_neutral_angles()
+        )
+        ok, angles = inverse_kinematics(target_coxa, lengths, prefer=prefer)
         if not ok and last_angles and mount.leg_id in last_angles:
             angles = last_angles[mount.leg_id]
         out.append(

@@ -95,6 +95,18 @@ stored in `config/hexapod_gait.yml` for faithful offline replay.
 
 Fail-fast: `domain/gait_config.load_gait_config` требует µs `[coxa,femur,tibia]` массивы.
 
+### L-stance servo null (calculator)
+
+`servo_neutral_angles: [0, 0, −π/2]` — math pose at 1500 µs / 90°:
+femur horizontal, tibia vertical down (⊥ floor), knee `|tibia| = π/2`.
+FK tip uses **tibia_effective** (print + foot pad) so `body_height ≈ tibia_eff`.
+
+Pulse traj µs arrays are **unchanged**. Offline pulse GIFs therefore animate
+**relative to L-stance** and may look unnatural until firmware trajs are
+re-tuned for that mechanical zero. Use IK mode for geometry-faithful gait.
+`ik_reach_margin_mm` (default 5) keeps IK targets slightly inside the L-reach
+boundary (vertical tibia is near the workspace edge).
+
 ---
 
 ## Rename note

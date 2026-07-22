@@ -28,8 +28,9 @@ def _leg_points(
     pad: float,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
-    Neutral standing chain.
+    Neutral L-stance chain (signed radial: right +X, left −X in CAD).
 
+    femur along horizontal outward radial; tibia straight down (CAD −Y).
     Returns (print_chain hip→coxa→knee→tip, pad_segment tip→contact, tibia_dir).
     """
     radial = origin - center
@@ -39,21 +40,18 @@ def _leg_points(
         radial = np.array([1.0, 0.0, 0.0])
     else:
         radial = radial / norm
-    up = np.array([0.0, 1.0, 0.0])
-    down = -up
+    down = np.array([0.0, -1.0, 0.0])
 
     hip = origin
     coxa_end = hip + radial * coxa
-    femur_dir = (radial + down)
-    femur_dir = femur_dir / np.linalg.norm(femur_dir)
-    knee = coxa_end + femur_dir * femur
-    tibia_dir = (0.35 * radial + down)
-    tibia_dir = tibia_dir / np.linalg.norm(tibia_dir)
-    tip = knee + tibia_dir * tibia_print
-    contact = tip + tibia_dir * pad
+    # L-pose: femur horizontal along signed radial (mirrors left/right)
+    knee = coxa_end + radial * femur
+    # tibia vertical down (⊥ floor in CAD Y-up)
+    tip = knee + down * tibia_print
+    contact = tip + down * pad
     print_chain = np.vstack([hip, coxa_end, knee, tip])
     pad_seg = np.vstack([tip, contact])
-    return print_chain, pad_seg, tibia_dir
+    return print_chain, pad_seg, down
 
 
 def render(
@@ -255,7 +253,7 @@ def render(
     ax_3d.set_ylabel("Z (forward)")
     ax_3d.set_zlabel("Y (up)")
     ax_3d.set_title(
-        "3D neutral stick figure\n"
+        "3D L-stance stick figure\n"
         f"coxa={coxa:.1f}  femur={femur:.1f}  "
         f"tibia={tibia_print:.1f}+{protrusion:.0f}={tibia_eff:.1f} mm"
     )

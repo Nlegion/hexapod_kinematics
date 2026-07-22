@@ -10,7 +10,11 @@ build/
 .ruff_cache/
 .venv/
 venv/
-export/
+# Generated export artifacts; keep showcase media for README
+export/*
+!export/robot_kinematics_preview.png
+!export/pulse_aligned.gif
+!export/motion_ik.gif
 *.log
 .DS_Store
 .cursor/

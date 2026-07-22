@@ -25,6 +25,9 @@ def test_gait_load_ok() -> None:
     g = load_gait_config(GAIT)
     assert len(g["transfer_traj"]) == 4
     assert len(g["support_traj"]) == 4
+    assert "servo_neutral_angles" in g
+    assert len(g["servo_neutral_angles"]) == 3
+    assert g["ik_reach_margin_mm"] == 5.0
 
 
 def test_gait_fail_fast_missing_traj(tmp_path: Path) -> None:

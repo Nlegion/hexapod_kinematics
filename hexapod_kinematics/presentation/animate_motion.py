@@ -14,6 +14,47 @@ from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 from hexapod_kinematics.core.constants.world_frame import LEG_SHORT_NAMES
 
 COLORS = ("#e74c3c", "#e67e22", "#f1c40f", "#2ecc71", "#3498db", "#9b59b6")
+LABEL_FS = 11
+TICK_FS = 10
+TITLE_FS = 13
+PAD_XY_MM = 50.0
+PAD_Z_MM = 15.0
+
+
+def _collect_bounds(
+    frames: list[dict[str, Any]],
+    mounts_xy: np.ndarray,
+) -> tuple[tuple[float, float], tuple[float, float], tuple[float, float]]:
+    """Fixed axis limits from all frames (chains + feet + mounts)."""
+    pts: list[np.ndarray] = []
+    for fr in frames:
+        for chain in (fr.get("chains") or {}).values():
+            pts.append(np.asarray(chain, dtype=float))
+        for fxy in (fr.get("foot_xy") or {}).values():
+            xy = np.asarray(fxy, dtype=float).reshape(-1)[:2]
+            pts.append(np.array([[xy[0], xy[1], 0.0]], dtype=float))
+    if mounts_xy.size:
+        z0 = np.zeros((len(mounts_xy), 1))
+        pts.append(np.hstack([np.asarray(mounts_xy, dtype=float), z0]))
+    if not pts:
+        return (-200.0, 200.0), (-200.0, 200.0), (0.0, 80.0)
+    cloud = np.vstack(pts)
+    x0 = float(cloud[:, 0].min() - PAD_XY_MM)
+    x1 = float(cloud[:, 0].max() + PAD_XY_MM)
+    y0 = float(cloud[:, 1].min() - PAD_XY_MM)
+    y1 = float(cloud[:, 1].max() + PAD_XY_MM)
+    z_max = max(float(cloud[:, 2].max()) + PAD_Z_MM, 40.0)
+    return (x0, x1), (y0, y1), (0.0, z_max)
+
+
+def _style_axes(ax3d, ax_top, ax_foot) -> None:
+    for ax in (ax3d, ax_top, ax_foot):
+        ax.tick_params(labelsize=TICK_FS)
+        ax.xaxis.label.set_size(LABEL_FS)
+        ax.yaxis.label.set_size(LABEL_FS)
+        if hasattr(ax, "zaxis"):
+            ax.zaxis.label.set_size(LABEL_FS)
+        ax.title.set_size(TITLE_FS)
 
 
 def _draw_frame(
@@ -25,6 +66,10 @@ def _draw_frame(
     footfall: np.ndarray,
     t_norm: float,
     title: str,
+    *,
+    xlim: tuple[float, float],
+    ylim: tuple[float, float],
+    zlim: tuple[float, float],
 ) -> None:
     ax3d.cla()
     ax_top.cla()
@@ -41,7 +86,7 @@ def _draw_frame(
         lid = int(lid_s)
         arr = np.asarray(pts, dtype=float)
         all_pts.append(arr)
-        ax3d.plot(arr[:, 0], arr[:, 1], arr[:, 2], "-o", color=COLORS[lid], ms=3)
+        ax3d.plot(arr[:, 0], arr[:, 1], arr[:, 2], "-o", color=COLORS[lid], ms=4)
     # Body polygon at hip height
     if len(mounts_xy):
         order = np.argsort(np.arctan2(mounts_xy[:, 1], mounts_xy[:, 0]))
@@ -58,27 +103,27 @@ def _draw_frame(
             lw=1.5,
         )
 
-    # Ground plane z=0
-    if all_pts:
-        cloud = np.vstack(all_pts)
-        pad = 40.0
-        x0, x1 = float(cloud[:, 0].min() - pad), float(cloud[:, 0].max() + pad)
-        y0, y1 = float(cloud[:, 1].min() - pad), float(cloud[:, 1].max() + pad)
-        xx, yy = np.meshgrid([x0, x1], [y0, y1])
-        ax3d.plot_surface(xx, yy, np.zeros_like(xx), alpha=0.15, color="#95a5a6")
-        span = np.ptp(cloud, axis=0)
-        span = np.maximum(span, 1.0)
-        # Keep vertical scale readable vs floor gap
-        span[2] = max(span[2], abs(float(cloud[:, 2].max())) + 10.0)
-        ax3d.set_box_aspect(span)
-        ax3d.set_zlim(0.0, max(float(cloud[:, 2].max()) * 1.15, 30.0))
-        ax3d.view_init(elev=22, azim=-60)
+    # Fixed ground plane and axes (do not follow the moving cloud)
+    xx, yy = np.meshgrid(list(xlim), list(ylim))
+    ax3d.plot_surface(xx, yy, np.zeros_like(xx), alpha=0.15, color="#95a5a6")
+    ax3d.set_xlim(*xlim)
+    ax3d.set_ylim(*ylim)
+    ax3d.set_zlim(*zlim)
+    span = np.array(
+        [xlim[1] - xlim[0], ylim[1] - ylim[0], zlim[1] - zlim[0]],
+        dtype=float,
+    )
+    span = np.maximum(span, 1.0)
+    ax3d.set_box_aspect(span)
+    ax3d.view_init(elev=22, azim=-60)
 
-    # Top view
+    # Top view — same XY limits every frame
     ax_top.set_aspect("equal")
     ax_top.set_xlabel("X fwd")
     ax_top.set_ylabel("Y left")
-    ax_top.plot(mounts_xy[:, 0], mounts_xy[:, 1], "k.", ms=4)
+    ax_top.set_xlim(*xlim)
+    ax_top.set_ylim(*ylim)
+    ax_top.plot(mounts_xy[:, 0], mounts_xy[:, 1], "k.", ms=5)
     stance = frame.get("stance_ids") or []
     if len(stance) >= 3:
         pts = []
@@ -89,10 +134,10 @@ def _draw_frame(
         poly = Polygon(xy, closed=True, fill=False, edgecolor="gray")
         ax_top.add_patch(poly)
     com = frame.get("com_xy", [0, 0])
-    ax_top.plot(com[0], com[1], "r+", ms=10, label="COM")
+    ax_top.plot(com[0], com[1], "r+", ms=12, label="COM")
     for lid_s, fxy in frame.get("foot_xy", {}).items():
         lid = int(lid_s)
-        ax_top.plot(fxy[0], fxy[1], "o", color=COLORS[lid], ms=5)
+        ax_top.plot(fxy[0], fxy[1], "o", color=COLORS[lid], ms=6)
     ax_top.set_title("Top: support / COM")
 
     # Hildebrand: footfall[leg, time] = 1 stance
@@ -100,7 +145,7 @@ def _draw_frame(
     ax_foot.set_xlim(0, 1)
     ax_foot.set_ylim(-0.5, n_legs - 0.5)
     ax_foot.set_yticks(range(n_legs))
-    ax_foot.set_yticklabels(list(LEG_SHORT_NAMES))
+    ax_foot.set_yticklabels(list(LEG_SHORT_NAMES), fontsize=TICK_FS)
     ax_foot.set_xlabel("cycle fraction")
     ax_foot.set_title("Hildebrand footfall (black=stance)")
     for i in range(n_legs):
@@ -108,6 +153,8 @@ def _draw_frame(
             if footfall[i, j] > 0.5:
                 ax_foot.barh(i, 1.0 / n_t, left=j / n_t, height=0.6, color="black")
     ax_foot.axvline(t_norm, color="red", lw=1)
+
+    _style_axes(ax3d, ax_top, ax_foot)
 
 
 def build_footfall(anim_frames: list[dict[str, Any]], frames_per_cycle: int | None = None) -> np.ndarray:
@@ -130,15 +177,16 @@ def _default_fps(anim_frames: list[dict[str, Any]]) -> float:
     """
     Comfortable playback FPS from frame timestamps.
 
-    Pulse traj has few steps (150 ms each); realtime ≈ 6–7 fps feels rushed,
-    so we play at half speed (≈ 3 fps) by default.
+    Play at half of simulated realtime so pulse (dt≈150 ms → ≈3.3 fps) and
+    dense IK (dt≈30 ms → ≈16.7 fps) finish a gait cycle in the same wall time.
+    Do not cap FPS — a low ceiling makes IK GIFs crawl vs pulse.
     """
     times = [float(fr.get("t_ms", 0.0)) for fr in anim_frames]
     dts = [times[i + 1] - times[i] for i in range(len(times) - 1) if times[i + 1] > times[i]]
     if dts:
         median_dt_ms = float(np.median(dts))
         realtime = 1000.0 / median_dt_ms
-        return max(1.0, min(realtime * 0.5, 8.0))
+        return max(1.0, realtime * 0.5)
     return 3.0
 
 
@@ -174,9 +222,10 @@ def animate_motion(
 
     play_fps = float(fps) if fps is not None else _default_fps(anim_frames)
     interval_ms = int(round(1000.0 / play_fps))
+    xlim, ylim, zlim = _collect_bounds(frames, mounts_xy)
 
     footfall = build_footfall(frames)
-    fig = plt.figure(figsize=(12, 8))
+    fig = plt.figure(figsize=(13, 9))
     ax3d = fig.add_subplot(2, 2, 1, projection="3d")
     ax_top = fig.add_subplot(2, 2, 2)
     ax_foot = fig.add_subplot(2, 1, 2)
@@ -184,7 +233,19 @@ def animate_motion(
     def _update(i: int):
         fr = frames[i]
         t_norm = (i % footfall.shape[1]) / max(footfall.shape[1], 1)
-        _draw_frame(ax3d, ax_top, ax_foot, fr, mounts_xy, footfall, t_norm, title)
+        _draw_frame(
+            ax3d,
+            ax_top,
+            ax_foot,
+            fr,
+            mounts_xy,
+            footfall,
+            t_norm,
+            title,
+            xlim=xlim,
+            ylim=ylim,
+            zlim=zlim,
+        )
         return []
 
     anim = FuncAnimation(

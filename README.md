@@ -5,11 +5,43 @@ Python toolkit that:
 1. **Extracts** link lengths and body mounts from KOMPAS-3D CAD (`spider_body\996`) via LCS.
 2. **Exports** JSON + C headers for firmware (`P:\Arduino\hexapod`).
 3. **Simulates** offline gait (firmware pulse replay + IK), writes CSV/JSONL logs, GIFs, and markdown reports.
-4. **Visualizes** a static stick-figure preview from the exported JSON.
+4. **Visualizes** a static L-stance stick-figure preview from the exported JSON.
 5. **Syncs** CAD lengths into Arduino `Config.h`.
 
 Package: **`hexapod_kinematics`** (PyPI / install name: `hexapod-kinematics`).  
 CLI entry: `py -3 -m hexapod_kinematics …` (also console scripts `hexapod-kinematics`, `kinematics-extract`).
+
+---
+
+## Gallery
+
+Neutral **L-stance** (1500 µs / 90°): femur horizontal outward, tibia vertical down (⊥ floor), knee 90°. Body height uses **tibia_effective** (print + foot pad). Motion GIFs use fixed axis limits (do not rescale while walking).
+
+### Static preview
+
+![L-stance kinematics preview](export/robot_kinematics_preview.png)
+
+[`export/robot_kinematics_preview.png`](export/robot_kinematics_preview.png) — top view of body mounts + 3D L-stance stick figure.
+
+### Pulse replay (aligned)
+
+![Pulse-aligned gait GIF](export/pulse_aligned.gif)
+
+[`export/pulse_aligned.gif`](export/pulse_aligned.gif) — firmware `TRANSFER_TRAJ` / `SUPPORT_TRAJ` replayed with L-stance servo null; stance tips aligned to ground (`pulse_aligned`).
+
+### IK gait
+
+![IK gait GIF](export/motion_ik.gif)
+
+[`export/motion_ik.gif`](export/motion_ik.gif) — alternating tripod foot targets → IK (continuous elbow branch). Prefer this GIF for geometry-faithful gait visualization.
+
+Regenerate:
+
+```bat
+py -3 -m hexapod_kinematics visualize --json export/kinematics_996.json --out export/robot_kinematics_preview.png
+py -3 -m hexapod_kinematics simulate --mode pulse_aligned --cycles 2 --animate --out-gif export/pulse_aligned.gif
+py -3 -m hexapod_kinematics simulate --mode ik --cycles 2 --animate --out-gif export/motion_ik.gif
+```
 
 ---
 
@@ -19,14 +51,14 @@ CLI entry: `py -3 -m hexapod_kinematics …` (also console scripts `hexapod-kine
 hexapod_kinematics/          # installable Python package
   presentation/              # CLI, matplotlib animate / visualize
   application/               # extract pipeline, simulate, sync, reports
-  domain/                    # frames, IK, pulse gait, metrics, dynamics
+  domain/                    # frames, IK, pulse gait, neutral L-pose, metrics
   infrastructure/kompas/     # COM session, documents, LCS, matrices
   core/                      # config loader, constants, logging
 config/
-  hexapod_gait.yml           # firmware pulse traj + IK planner params
+  hexapod_gait.yml           # pulse traj, servo_neutral_angles, IK planner
   masses_996.yml             # mass model (COM / torques)
 extractor_config.yml         # CAD roots, LCS maps, body_frame, servo, foot pad
-export/                      # generated artifacts (gitignored in practice)
+export/                      # generated artifacts (+ showcase PNG/GIFs above)
 science/                     # papers + NOTES.md (traceability to code)
 tests/                       # pytest (kompas marker excluded by default)
 ```
@@ -71,6 +103,20 @@ Editable install is optional if you always run from the repo root with `py -3 -m
 
 Folder → role mapping is in `extractor_config.yml` → `folder_roles` (e.g. `coxa_A_996`, `tiba_A_996`, `body_996`).
 
+### Servo null / math angles
+
+At **1500 µs (90°)** the calculator uses L-stance math angles from
+[`config/hexapod_gait.yml`](config/hexapod_gait.yml) → `servo_neutral_angles: [0, 0, −π/2]`:
+
+| Joint | Math at 1500 µs | Meaning |
+|-------|-----------------|---------|
+| coxa | 0 | radial outward |
+| femur | 0 | horizontal |
+| tibia | −π/2 | vertical down; knee \|tibia\| = 90° |
+
+Pulse I/O: `math = pulse_to_rad(pulse − 1500) + servo_neutral`. Core FK/IK use **math angles only**.  
+`body_height` (when null) = world `hip_z − tip_z` for that pose with **tibia_effective**.
+
 ---
 
 ## Coordinate frames (996)
@@ -96,7 +142,7 @@ For body mounts, coxa servo **Z** is expected **parallel to up** (yaw joint). Tr
 | File | Role |
 |------|------|
 | [`extractor_config.yml`](extractor_config.yml) | KOMPAS progid/bin, CAD root, folder roles, LCS maps, servo, foot pad, body_frame, auto-mount |
-| [`config/hexapod_gait.yml`](config/hexapod_gait.yml) | Snapshot of firmware `TRANSFER_TRAJ` / `SUPPORT_TRAJ` (µs) + IK params (`stride_mm`, `step_height_mm`, `swing_profile`, …) |
+| [`config/hexapod_gait.yml`](config/hexapod_gait.yml) | Firmware pulse µs arrays, `servo_neutral_angles`, `ik_reach_margin_mm`, IK planner (`stride_mm`, `step_height_mm`, …) |
 | [`config/masses_996.yml`](config/masses_996.yml) | Link/servo/body masses (g), COM fraction, total 1800 g |
 
 YAML overrides defaults from `hexapod_kinematics/core/constants/`.
@@ -148,18 +194,22 @@ Example lengths from a fresh extract (order of magnitude): coxa ≈ 52.5 mm, fem
 
 ## 2. Visualize (static stick figure)
 
-No KOMPAS. Needs `kinematics_996.json`.
+No KOMPAS. Needs `kinematics_996.json`. Draws an **L-stance** stick figure:
+coxa/femur horizontal outward (signed radial for left/right), tibia straight
+down (⊥ floor), foot-pad segment below the print tibia tip.
 
 ```bat
 py -3 -m hexapod_kinematics visualize --json export/kinematics_996.json --out export/robot_kinematics_preview.png
 ```
+
+![Preview](export/robot_kinematics_preview.png)
 
 | Flag | Meaning |
 |------|---------|
 | `--json` | Kinematics JSON (default: `export/kinematics_996.json`) |
 | `--out` | PNG path; if omitted, opens an interactive window |
 | `--show` | Force window even when `--out` is set |
-| `--body-height` | Place hips at this Z (mm) for display |
+| `--body-height` | Place hips at this CAD-Y (mm) for display |
 
 ---
 
@@ -178,10 +228,14 @@ py -3 -m hexapod_kinematics simulate --mode pulse_aligned --cycles 2 --log-dir e
 | `pulse` | Alias of **`pulse_aligned`** |
 | `pulse_raw` | Firmware angles / FK as-is (no ground alignment) |
 | `pulse_aligned` | Same joint angles; rigid body ΔZ so min stance tip **z → 0** each frame |
-| `ik` | Alternating tripod foot targets → IK (CAD lengths / mounts) |
+| `ik` | Alternating tripod foot targets → IK (two elbows; pick branch nearest to previous / L-start) |
 | `compare` | Run pulse_aligned first; set IK `stride_mm` to **measured** pulse stride, then IK |
 
+**Pulse-mode caveat:** `TRANSFER_TRAJ` / `SUPPORT_TRAJ` are still the firmware µs snapshot and were **not** rewritten for L-zero. Pulse GIFs show motion **relative to L-stance** and can look unnatural until firmware trajs are re-tuned. Prefer **`ik`** for geometry-faithful gait viz. `ik_reach_margin_mm` (default **5**) pulls IK feet slightly inward of full L-reach.
+
 Without `--scale-pulse-to-stride` or `compare`, raw pulse stride vs arbitrary IK `stride_mm` is **not** a fair comparison.
+
+GIF playback defaults to **half simulated realtime** (pulse and IK finish a cycle in similar wall time). Plot axes are **fixed** for the whole animation (limits from all frames).
 
 ### Useful flags
 
@@ -216,6 +270,10 @@ py -3 -m hexapod_kinematics simulate --mode ik --cycles 2 --animate --out-gif ex
 py -3 -m hexapod_kinematics simulate --mode compare --cycles 2 --animate --out-gif export/motion_compare.gif
 ```
 
+![Pulse aligned](export/pulse_aligned.gif)
+
+![IK motion](export/motion_ik.gif)
+
 With `--out-gif export/motion_compare.gif`, compare writes:
 
 - `export/motion_compare_pulse_aligned.gif`
@@ -227,7 +285,7 @@ Under `export/logs/` (timestamped):
 
 | Pattern | Contents |
 |---------|----------|
-| `motion_<mode>_<stamp>_legs.csv` (+ `.jsonl`) | Per-leg / per-frame angles, tips, roles, … |
+| `motion_<mode>_<stamp>_legs.csv` (+ `.jsonl`) | Per-leg / per-frame angles, tips, roles, `pulse_*`, … |
 | `motion_<mode>_<stamp>_summary.csv` | Frame metrics: `support_ok`, `phase_err_*`, `ik_fail_ratio`, … |
 | `motion_<mode>_<stamp>_report.md` | Human-readable run report (also printed to stdout) |
 | `motion_<branch>_torques.csv` | With `--torques`: `M_femur_nm`, `M_tibia_nm`, … |
@@ -278,8 +336,8 @@ Auto-mount decisions are logged on stderr (`mount_assigned …`).
 ```bat
 cd /d P:\hexapod_kinematics
 
-:: 1) Clear old artifacts (optional)
-rmdir /s /q export
+:: 1) Clear old artifacts (optional; keeps showcase media if you only delete logs)
+rmdir /s /q export\logs
 mkdir export\logs
 
 :: 2) CAD extract (needs KOMPAS)
@@ -299,8 +357,8 @@ Expected top-level export files after that:
 
 - `kinematics_996.json`
 - `generated_kinematics_996.h`, `generated_link_lengths.h`
-- `robot_kinematics_preview.png`
-- `pulse_aligned.gif`, `motion_ik.gif`
+- `robot_kinematics_preview.png` *(tracked for README)*
+- `pulse_aligned.gif`, `motion_ik.gif` *(tracked for README)*
 - `motion_compare_pulse_aligned.gif`, `motion_compare_ik.gif`
 - `logs/…`
 
@@ -325,7 +383,7 @@ py -3 -m ruff check hexapod_kinematics tests
 
 ## Related docs
 
-- [`science/NOTES.md`](science/NOTES.md) — papers → calculator parameters, modes, log fields, mass table
+- [`science/NOTES.md`](science/NOTES.md) — papers → calculator parameters, L-stance / pulse null, modes, log fields, mass table
 - [`extractor_config.yml`](extractor_config.yml) — CAD / frame / auto-mount policy
-- [`config/hexapod_gait.yml`](config/hexapod_gait.yml) — pulse arrays + IK planner
+- [`config/hexapod_gait.yml`](config/hexapod_gait.yml) — pulse arrays, `servo_neutral_angles`, IK planner
 - [`DOC017151299.pdf`](DOC017151299.pdf) — MG996R datasheet (servo envelope)

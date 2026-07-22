@@ -17,6 +17,8 @@ from hexapod_kinematics.domain.kinematics import (
     forward_kinematics,
     pulses_to_angles,
 )
+from hexapod_kinematics.domain.neutral_pose import resolve_servo_neutral
+
 
 PulseMode = Literal["pulse_raw", "pulse_aligned"]
 
@@ -63,6 +65,7 @@ def _fk_frame(
     step: Any,
     neutral: float,
     deg_per_us: float,
+    neutral_angles: JointAngles,
 ) -> tuple[
     dict[int, JointAngles],
     dict[int, Any],
@@ -78,7 +81,12 @@ def _fk_frame(
     for mount in mounts:
         lid = mount.leg_id
         pulses = step.pulses[lid]
-        angles = pulses_to_angles(pulses, neutral=neutral, deg_per_us=deg_per_us)
+        angles = pulses_to_angles(
+            pulses,
+            neutral=neutral,
+            deg_per_us=deg_per_us,
+            neutral_angles=neutral_angles,
+        )
         tip = forward_kinematics(angles, lengths)
         chain = chain_to_body(angles, lengths, mount)
         angles_map[lid] = angles
@@ -109,6 +117,7 @@ def simulate_pulse(
     """
     neutral = float(gait.get("neutral", 1500))
     deg_per_us = float(gait.get("deg_per_us", 0.18))
+    neutral_angles = resolve_servo_neutral(gait, lengths)
     group1 = set(int(x) for x in gait["tripod_group_1"])
     com_off = np.asarray(gait.get("com_offset_mm", [0, 0, 0]), dtype=float)
     delay = float(gait.get("step_delay_ms", 150))
@@ -129,6 +138,7 @@ def simulate_pulse(
             step=step,
             neutral=neutral,
             deg_per_us=deg_per_us,
+            neutral_angles=neutral_angles,
         )
         # Raw feet before alignment (always logged)
         foot_raw = {lid: foot_body[lid].copy() for lid in range(6)}
@@ -147,6 +157,7 @@ def simulate_pulse(
                 step=step,
                 neutral=neutral,
                 deg_per_us=deg_per_us,
+                neutral_angles=neutral_angles,
             )
 
         phases: dict[int, float] = {}

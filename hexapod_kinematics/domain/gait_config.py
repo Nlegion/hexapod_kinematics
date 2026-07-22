@@ -72,7 +72,22 @@ def load_gait_config(path: Path) -> dict[str, Any]:
             if int(lid) not in range(6):
                 raise GaitConfigError(f"{key} contains invalid leg_id {lid}")
 
+    sna = data.get("servo_neutral_angles")
+    if sna is not None:
+        if not isinstance(sna, (list, tuple)) or len(sna) != 3:
+            raise GaitConfigError(
+                "servo_neutral_angles must be [coxa, femur, tibia] radians"
+            )
+        for j, val in enumerate(sna):
+            if not isinstance(val, (int, float)):
+                raise GaitConfigError(f"servo_neutral_angles[{j}] must be numeric rad")
+
+    if "ik_reach_margin_mm" in data and data["ik_reach_margin_mm"] is not None:
+        if not isinstance(data["ik_reach_margin_mm"], (int, float)):
+            raise GaitConfigError("ik_reach_margin_mm must be numeric")
+
     data.setdefault("traj_steps", len(transfer))
+    data.setdefault("ik_reach_margin_mm", 5.0)
     data["_source_path"] = str(path.resolve())
     return data
 

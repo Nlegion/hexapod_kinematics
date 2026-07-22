@@ -137,10 +137,10 @@ def place_hips_above_ground(
     """
     Set hip Z = body_height so the body floats above ground plane z=0.
 
-    This does **not** IK-fit tips to the floor. For stance tip_z ≈ 0 use mode
+    When ``body_height_mm`` comes from ``resolve_body_height_mm`` with
+    ``servo_neutral_angles``, FK at those math angles places tips on z≈0
+    without an extra alignment pass. For non-neutral gait frames use mode
     ``pulse_aligned``: same joint angles, rigid body ΔZ so min(stance tip_z)→0.
-    Combined with this hip placement, invariants expect stance tips near z=0
-    after alignment (±1 mm).
     """
     h = float(body_height_mm)
     out: list[MountWorld] = []
@@ -165,10 +165,31 @@ def resolve_body_height_mm(
     gait: dict[str, Any],
     model: dict[str, Any],
 ) -> float:
-    """Explicit gait body_height, else gabarit-based, else fallback."""
+    """
+    Hip height above ground (world Z).
+
+    Order: explicit ``body_height_mm`` → world ``z_hip − z_foot`` at
+    ``servo_neutral_angles`` → gabarit → ``body_height_fallback_mm``.
+    """
     explicit = gait.get("body_height_mm")
     if explicit is not None:
         return float(explicit)
+
+    # Prefer neutral standing: hip_z − foot_z in world (mount orientation aware)
+    sna = gait.get("servo_neutral_angles")
+    if sna is not None:
+        from hexapod_kinematics.domain.body_frame_kin import lengths_from_model
+        from hexapod_kinematics.domain.neutral_pose import (
+            body_height_from_neutral,
+            servo_neutral_from_gait,
+        )
+
+        angles = servo_neutral_from_gait(gait)
+        if angles is not None:
+            mounts = mounts_from_model(model)
+            lengths = lengths_from_model(model)
+            if mounts:
+                return body_height_from_neutral(angles, lengths, mounts[0])
 
     clearance = float(gait.get("ground_clearance_mm", 5.0))
     r = cad_to_world_matrix(model)

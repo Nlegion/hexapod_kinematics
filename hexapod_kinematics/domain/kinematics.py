@@ -5,13 +5,16 @@ Angle convention is internally consistent (IK ↔ FK round-trip).
 Inspired by P:\\Arduino\\hexapod KinematicsService, but firmware FK/IK
 formulas disagree with each other; this module uses the verified pair:
 
-  femur = atan2(z, r - L_coxa) - alpha
-  tibia = pi - eps
+  Two planar elbows: tibia = ±(π − eps)
+    + : femur = gamma − alpha, tibia = +(π − eps)
+    − : femur = gamma + alpha, tibia = −(π − eps)
   radial = L_coxa + L_femur*cos(femur) + L_tibia*cos(femur + tibia)
   z     = L_femur*sin(femur) + L_tibia*sin(femur + tibia)
   x = radial * cos(coxa);  y = radial * sin(coxa)
 
 Coxa-local: x/y horizontal, z up. Units: mm, radians, microseconds.
+Servo 1500 µs maps to math via gait ``servo_neutral_angles`` (L-stance)
+in pulse I/O helpers only — core FK/IK stay in math angles.
 """
 
 from __future__ import annotations
@@ -68,11 +71,25 @@ def pulses_to_angles(
     neutral: float = 1500.0,
     deg_per_us: float = 0.18,
     offsets: tuple[int, int, int] = (0, 0, 0),
+    neutral_angles: JointAngles | None = None,
 ) -> JointAngles:
-    return JointAngles(
+    """
+    Pulse I/O → math joint angles.
+
+    ``neutral_angles`` (from gait ``servo_neutral_angles``) are the math pose at
+    pulse ``neutral`` (1500 µs / 90°). Core FK/IK never see pulses.
+    """
+    delta = JointAngles(
         coxa=pulse_to_rad(pulses.coxa - offsets[0], neutral=neutral, deg_per_us=deg_per_us),
         femur=pulse_to_rad(pulses.femur - offsets[1], neutral=neutral, deg_per_us=deg_per_us),
         tibia=pulse_to_rad(pulses.tibia - offsets[2], neutral=neutral, deg_per_us=deg_per_us),
+    )
+    if neutral_angles is None:
+        return delta
+    return JointAngles(
+        coxa=delta.coxa + neutral_angles.coxa,
+        femur=delta.femur + neutral_angles.femur,
+        tibia=delta.tibia + neutral_angles.tibia,
     )
 
 
@@ -82,11 +99,23 @@ def angles_to_pulses(
     neutral: float = 1500.0,
     deg_per_us: float = 0.18,
     offsets: tuple[int, int, int] = (0, 0, 0),
+    neutral_angles: JointAngles | None = None,
 ) -> ServoPulses:
+    """Math joint angles → pulse I/O (inverse of ``pulses_to_angles``)."""
+    math_angles = angles
+    if neutral_angles is not None:
+        math_angles = JointAngles(
+            coxa=angles.coxa - neutral_angles.coxa,
+            femur=angles.femur - neutral_angles.femur,
+            tibia=angles.tibia - neutral_angles.tibia,
+        )
     return ServoPulses(
-        coxa=rad_to_pulse(angles.coxa, neutral=neutral, deg_per_us=deg_per_us) + offsets[0],
-        femur=rad_to_pulse(angles.femur, neutral=neutral, deg_per_us=deg_per_us) + offsets[1],
-        tibia=rad_to_pulse(angles.tibia, neutral=neutral, deg_per_us=deg_per_us) + offsets[2],
+        coxa=rad_to_pulse(math_angles.coxa, neutral=neutral, deg_per_us=deg_per_us)
+        + offsets[0],
+        femur=rad_to_pulse(math_angles.femur, neutral=neutral, deg_per_us=deg_per_us)
+        + offsets[1],
+        tibia=rad_to_pulse(math_angles.tibia, neutral=neutral, deg_per_us=deg_per_us)
+        + offsets[2],
     )
 
 
@@ -112,8 +141,16 @@ def forward_kinematics(angles: JointAngles, lengths: LinkLengths) -> Position3D:
 def inverse_kinematics(
     target: Position3D,
     lengths: LinkLengths,
+    *,
+    prefer: JointAngles | None = None,
 ) -> tuple[bool, JointAngles]:
-    """Tip position (coxa-local) → joint angles. Returns (ok, angles)."""
+    """
+    Tip position (coxa-local) → joint angles. Returns (ok, angles).
+
+    Two planar solutions: tibia = ±(π − eps). When ``prefer`` is set, pick the
+    branch closest in joint space (used for trajectory continuity). Default
+    prefer is L-stance (0, 0, −π/2) when omitted at call sites that need it.
+    """
     horizontal = math.hypot(target.x, target.y)
     total = math.sqrt(target.x * target.x + target.y * target.y + target.z * target.z)
     max_reach = lengths.femur + lengths.tibia
@@ -147,10 +184,23 @@ def inverse_kinematics(
     alpha = math.acos(cos_alpha)
 
     gamma = math.atan2(target.z, radial)
-    # Consistent with FK: femur = gamma - alpha, tibia = pi - eps
-    femur = gamma - alpha
-    tibia = PI - eps
-    return True, JointAngles(coxa=coxa, femur=femur, tibia=tibia)
+    # Two elbows: tibia = +(π − eps) with femur = gamma − alpha
+    #              tibia = −(π − eps) with femur = gamma + alpha
+    cand_pos = JointAngles(coxa=coxa, femur=gamma - alpha, tibia=PI - eps)
+    cand_neg = JointAngles(coxa=coxa, femur=gamma + alpha, tibia=-(PI - eps))
+
+    if prefer is None:
+        return True, cand_pos
+
+    def _dist(a: JointAngles) -> float:
+        return (
+            (a.coxa - prefer.coxa) ** 2
+            + (a.femur - prefer.femur) ** 2
+            + (a.tibia - prefer.tibia) ** 2
+        )
+
+    chosen = cand_pos if _dist(cand_pos) <= _dist(cand_neg) else cand_neg
+    return True, chosen
 
 
 def joint_chain_coxa_local(

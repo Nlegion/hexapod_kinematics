@@ -18,6 +18,7 @@ from hexapod_kinematics.domain.kinematics import (
     angles_to_pulses,
     forward_kinematics,
 )
+from hexapod_kinematics.domain.neutral_pose import resolve_servo_neutral
 
 
 def simulate_ik(
@@ -39,6 +40,9 @@ def simulate_ik(
     cycle_time_ms = 2 * n_pulse * delay
     dt = cycle_time_ms / frames_per_cycle
     body_speed = stride / (cycle_time_ms / 1000.0)
+    neutral_pulse = float(gait.get("neutral", 1500))
+    deg_per_us = float(gait.get("deg_per_us", 0.18))
+    neutral_angles = resolve_servo_neutral(gait, lengths)
 
     leg_rows: list[dict[str, Any]] = []
     summary_rows: list[dict[str, Any]] = []
@@ -91,8 +95,9 @@ def simulate_ik(
             fail_hist.append(sample.ik_ok)
             pulses = angles_to_pulses(
                 sample.angles,
-                neutral=float(gait.get("neutral", 1500)),
-                deg_per_us=float(gait.get("deg_per_us", 0.18)),
+                neutral=neutral_pulse,
+                deg_per_us=deg_per_us,
+                neutral_angles=neutral_angles,
             )
             reach = float(
                 np.linalg.norm(
