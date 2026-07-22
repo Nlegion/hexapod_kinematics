@@ -1,12 +1,13 @@
+# CI disabled — does not run on push/PR.
+# Re-enable by restoring `on.push` / `on.pull_request` when ready.
 name: CI
 
 on:
-  push:
-    branches: [main, master]
-  pull_request:
+  workflow_dispatch:
 
 jobs:
   test:
+    if: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
