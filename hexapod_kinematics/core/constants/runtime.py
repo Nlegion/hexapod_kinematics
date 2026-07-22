@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-TOOL_NAME = "stl_reader kinematics extractor"
+TOOL_NAME = "hexapod_kinematics extractor"
 TOOL_VERSION = "0.1.0"
 
 DEFAULT_KOMPAS_BIN = Path(r"C:\Program Files\ASCON\KOMPAS-3D v21\Bin")
