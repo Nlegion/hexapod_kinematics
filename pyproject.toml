@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hexapod-kinematics"
+version = "0.1.0"
+description = "Extract hexapod kinematics from KOMPAS-3D LCS and offline gait calculator"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "comtypes>=1.4.0",
+  "PyYAML>=6.0",
+  "numpy>=1.26",
+  "matplotlib>=3.8",
+  "Pillow>=10.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.6",
+  "mypy>=1.11",
+]
+
+[project.scripts]
+kinematics-extract = "hexapod_kinematics.presentation.cli:main"
+hexapod-kinematics = "hexapod_kinematics.presentation.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["hexapod_kinematics*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-m \"not kompas\""
+markers = [
+  "kompas: requires installed KOMPAS-3D v21 (manual / non-CI)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+warn_unused_ignores = true
+check_untyped_defs = false

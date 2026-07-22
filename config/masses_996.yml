@@ -1,0 +1,30 @@
+# Mass model for hexapod 996 (grams). Used for COM and future dynamics.
+
+total_robot_g: 1800
+
+links_g:
+  coxa: 15
+  femur: 21
+  tibia: 26
+
+servos_g:
+  unit: 55
+  count: 18  # 6 legs × 3 joints
+
+body_g:
+  # 2 + 18*6 + 25 + 30 + 49 + 45 = 259
+  parts:
+    - { name: body_misc_a, mass_g: 2 }
+    - { name: body_misc_b_x6, mass_g: 18, count: 6 }
+    - { name: body_misc_c, mass_g: 25 }
+    - { name: body_misc_d, mass_g: 30 }
+    - { name: body_misc_e, mass_g: 49 }
+    - { name: body_misc_f, mass_g: 45 }
+
+battery_misc_g: 179  # remainder so total == total_robot_g
+
+# CoM of each link at mid-segment (Rukavitsyn O1/O2)
+com_link_fraction: 0.5
+
+# Optional extra COM offset in world (mm), after mass model
+com_offset_mm: [0.0, 0.0, 0.0]

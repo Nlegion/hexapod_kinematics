@@ -1,0 +1,39 @@
+# Snapshot of P:\Arduino\hexapod\src\core\Config.h gait + IK planner params.
+# Pulse arrays are microseconds (as-is firmware). Do not replace with foot offsets.
+
+neutral: 1500
+min_pulse: 1000
+max_pulse: 2000
+deg_per_us: 0.18
+
+transfer_traj:  # [coxa, femur, tibia] × TRAJ_STEPS
+  - [1320, 1700, 1250]
+  - [1500, 1800, 1150]
+  - [1680, 1800, 1150]
+  - [1680, 1550, 1450]
+
+support_traj:
+  - [1680, 1550, 1450]
+  - [1600, 1520, 1480]
+  - [1450, 1490, 1510]
+  - [1320, 1470, 1530]
+
+tripod_group_1: [0, 4, 2]  # FR, ML, RR
+tripod_group_2: [5, 1, 3]  # FL, MR, RL
+leg_forward_directions: [1, 1, 1, 1, 1, 1]
+
+step_delay_ms: 150
+default_servo_time_ms: 200
+
+# IK planner (science-informed)
+stride_mm: 40.0
+step_height_mm: 20.0
+stance_duty: 0.5
+swing_profile: poly5  # ellipse | cycloid | poly5
+body_height_mm: null  # null → auto from gabarit / fallback below
+body_height_fallback_mm: 45.0
+ground_clearance_mm: 5.0
+com_offset_mm: [0.0, 0.0, 0.0]
+
+# Neutral radial reach in coxa-local when placing feet (mm)
+neutral_reach_mm: null  # null → coxa + 0.55*(femur+tibia_eff)

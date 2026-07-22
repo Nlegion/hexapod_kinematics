@@ -1,0 +1,120 @@
+# KOMPAS-3D kinematics extractor configuration.
+# Defaults live in src/core/constants/; values here override them.
+
+kompas:
+  bin_path: "C:\\Program Files\\ASCON\\KOMPAS-3D v21\\Bin"
+  progid: "KOMPAS.Application.7"
+  connect_retries: 2
+  open_retries: 2
+  retry_delay_sec: 1.0
+
+roots:
+  cad: "C:\\Users\\npara\\OneDrive\\Desktop\\spider_body\\996"
+
+# folder name -> role metadata
+folder_roles:
+  coxa_A_996:
+    role: coxa
+    mirror: A
+    leaf_candidates: [base.m3d, body.m3d]
+  coxa_B_996:
+    role: coxa
+    mirror: B
+    leaf_candidates: [base.m3d, body.m3d]
+  femur_A_996:
+    role: femur
+    mirror: A
+    leaf_candidates: [base.m3d, middle.m3d]
+  femur_B_996:
+    role: femur
+    mirror: B
+    leaf_candidates: [base.m3d, middle.m3d]
+  tiba_A_996:
+    role: tibia
+    mirror: A
+    leaf_candidates: [base.m3d, body.m3d, tiba_B_996.m3d]
+  tiba_B_996:
+    role: tibia
+    mirror: B
+    leaf_candidates: [base.m3d, body.m3d, tiba_B_996.m3d]
+  body_996:
+    role: body
+    assembly_candidates: [body_996.a3d, body_test.a3d]
+    leaf_hint: [body_test_.m3d, part_3.m3d]
+
+# LCS name -> role (in | out | mount_leg_N)
+lcs_role_map:
+  LCS_in: in
+  LCS_: in
+  in: in
+  LCS_out: out
+  LCS__: out
+  out: out
+  mount_leg_1: mount_leg_1
+  mount_leg_2: mount_leg_2
+  mount_leg_3: mount_leg_3
+  mount_leg_4: mount_leg_4
+  mount_leg_5: mount_leg_5
+  mount_leg_6: mount_leg_6
+
+# LCS name -> hexapod LegID 0..5 (explicit names)
+leg_mount_map:
+  mount_leg_1: 0
+  mount_leg_2: 1
+  mount_leg_3: 2
+  mount_leg_4: 3
+  mount_leg_5: 4
+  mount_leg_6: 5
+
+# Optional external map file (keys: "component_index:LCS_name" or LCS name)
+mount_map_path: null
+
+servo:
+  body_length_mm: 40.7
+  body_width_mm: 19.7
+  body_height_mm: 42.9
+  mg996r_axis_length_mm: 42.9
+  datasheet_ref: "DOC017151299.pdf"
+  min_mm: 5.0
+  max_mm: 80.0
+  femur_override_length_mm: null
+
+# Tip pad RF-F12050 (12×5 mm silicone), recessed 3 mm → +2 mm stance height
+foot_pad:
+  part: "RF-F12050"
+  diameter_mm: 12.0
+  height_mm: 5.0
+  recess_mm: 3.0
+  protrusion_mm: 2.0
+
+# KOMPAS assembly frame → robot
+# 996 body is elongated along Z; Y is vertical in the assembly.
+# Calculator world frame: X forward, Y left, Z up (cad_to_world_rotation).
+body_frame:
+  forward_axis: [0.0, 0.0, 1.0]
+  up_axis: [0.0, 1.0, 0.0]
+  yaw_unit: deg
+  coxa_up_dot_tol: 0.15
+  cad_to_world_rotation:
+    - [0.0, 0.0, 1.0]
+    - [-1.0, 0.0, 0.0]
+    - [0.0, 1.0, 0.0]
+  body_forward_axis_world: [1.0, 0.0, 0.0]
+  body_up_axis_world: [0.0, 0.0, 1.0]
+
+body_mount_auto:
+  enabled: true
+  candidate_lcs_names: [LCS_in, mount_leg_1, mount_leg_2, mount_leg_3, mount_leg_4, mount_leg_5, mount_leg_6]
+  radius_mode: fraction_of_extent
+  radius_fraction: 0.25
+  radius_absolute_mm: 50.0
+  sweep: cw
+  start_anchor:
+    prefer_side: negative_right
+  leg_order_from_anchor: [0, 1, 2, 3, 4, 5]
+
+tolerances:
+  angle_tol_deg: 0.1
+  lateral_tol_mm: 0.5
+
+duplicate_lcs_policy: first_with_warning
